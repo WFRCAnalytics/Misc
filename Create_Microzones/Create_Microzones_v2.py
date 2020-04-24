@@ -8,6 +8,7 @@ Created on Fri Apr 24 12:22:01 2020
 
 import arcpy
 import os
+import glob
 arcpy.env.overwriteOutput = True
 
 """
@@ -34,11 +35,14 @@ Delete the selected preliminary blocks and then append the filled blocks layer
 
 add TAZ ID to microzone using centroid probably
 """
-
+#==========================
 # Args
-taz_polygons = r'E:\Data\TAZ_geometry.shp'
+#==========================
+
+taz_polygons =os.path.join(os.getcwd(), 'Data\TAZ_geometry.shp') 
 roads = r'E:\Data\Roads.shp'
-temp_dir = r'E:\Projects\Misc\Create_Microzones\Output'
+temp_dir = os.path.join(os.getcwd(), 'Output')
+delete_intermediate_layers = True
 
 #==========================
 # Create Preliminary Zones
@@ -66,29 +70,23 @@ merged_roads = arcpy.Merge_management([roads_clipped, taz_outline], os.path.join
 # Create zones using feature to polygon tool
 prelim_zones = arcpy.FeatureToPolygon_management(merged_roads, os.path.join(temp_dir,"prelim_zones.shp"))
 
+#========================================
+# Eliminate Small Zones using two passes
+#========================================
 
-
-#==========================
-# Eliminate Small Zones
-#==========================       
-
-print('Eliminating small zones...')
-
-# Calc Area
-arcpy.AddField_management(prelim_zones, 'area_sqkm', 'FLOAT')
-arcpy.CalculateGeometryAttributes_management(prelim_zones, [['area_sqkm','AREA']], '', 'SQUARE_KILOMETERS')
-
+print('Eliminating small zones (1st pass)...')
+arcpy.AddField_management(prelim_zones, 'area_sqm', 'FLOAT')
+arcpy.CalculateGeometryAttributes_management(prelim_zones, [['area_sqm','AREA']], '', 'SQUARE_METERS')
 zones_layer = arcpy.MakeFeatureLayer_management(prelim_zones, 'zones')
-query = """"area_sqkm" < .005"""
+query = """"area_sqm" < 5000"""
 arcpy.SelectLayerByAttribute_management(zones_layer, "NEW_SELECTION", query)
-
-
 zones_eliminated = arcpy.Eliminate_management(zones_layer, os.path.join(temp_dir, 'zones_eliminated_again.shp'), 'LENGTH')
 
+print('Eliminating small zones (2nd pass)...')
+arcpy.CalculateGeometryAttributes_management(zones_eliminated, [['area_sqm','AREA']], '', 'SQUARE_METERS')
 zones_layer2 = arcpy.MakeFeatureLayer_management(zones_eliminated, 'zones')
-query = """"area_sqkm" < .010"""
+query = """"area_sqm" < 10000"""
 arcpy.SelectLayerByAttribute_management(zones_layer2, "NEW_SELECTION", query)
-
 zones_eliminated2 = arcpy.Eliminate_management(zones_layer2, os.path.join(temp_dir, 'zones_eliminated_again2.shp'), 'LENGTH')
 
 #==========================
@@ -142,14 +140,22 @@ arcpy.CalculateField_management(merged_zones,"zone_id",'!{}!'.format('FID'))
 microzones = arcpy.SpatialJoin_analysis(merged_zones, taz_polygons, os.path.join(temp_dir, 'microzones.shp'),'JOIN_ONE_TO_ONE', '', '', 'HAVE_THEIR_CENTER_IN')
 
 # Delete extra fields
-fields = ["Join_Count", 'TARGET_FID', 'Id', 'ORIG_FID', 'OBJECT_ID', 'rings', 'parts']
+fields = ["Join_Count", 'TARGET_FID', 'Id', 'ORIG_FID', 'OBJECTID', 'rings', 'parts']
 for field in fields:
     try:
         arcpy.DeleteField_management(microzones, field)
     except:
         print('Unable to delete field: {}'.format(field))
 
-
+# Delete intermediate files (optional)
+if delete_intermediate_layers == True:
+    trash = [filled_zones, merged_roads, merged_zones, microzones_no_rings, microzones_rings_erased, prelim_zones, roads_clipped, taz_dissolved, taz_outline, zones_eliminated, zones_eliminated2]
+    print("Deleting intermediate files...")
+    for dataset in trash:
+        try:
+            arcpy.Delete_management(dataset)
+        except:
+            print('A file was unable to be deleted')
 
 
 print('DONE!')
