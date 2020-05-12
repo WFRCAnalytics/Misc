@@ -91,7 +91,7 @@ def MultiRing_Buffer(in_shapefile, out_shapefile, distance_list, field_name="dis
 #================
 
 #set working directory
-wd = r"C:\LocalGIS\LatentDemand2020\DemandPolygon_Test_Scripting.gdb"
+wd = r"C:\LocalGIS\LatentDemand2020\DemandPolygon_Inputs.gdb"
 temp_wd = os.path.dirname(wd)
 arcpy.env.workspace = wd
 arcpy.env.overwriteOutput = True
@@ -397,6 +397,15 @@ print(removefields)
 
 arcpy.DeleteField_management("DemandScore", removefields)
 
+# Clean up - delete intermediate feature classes
+print("Deleting intermediate feature classes...")
+removefcs = ["ZonesJoin1", "ZonesJoin2", "ZonesJoin3", "ZonesJoin4", "ZonesJoin5", "ZonesJoin6", "ZonesJoin7", "ZonesJoin8", "ZonesJoin9",
+             "ZonesJoin10", "ZonesJoin11", "ZonesJoin12", "ZonesJoin13"]
+for f in removefcs:
+    arcpy.Delete_management(f)
+
+print("Intermediate feature classes deleted!")
+
 
 # Deal with null values in scores fields
 
@@ -690,5 +699,18 @@ with arcpy.da.UpdateCursor(joinfc, blockfields) as cursor:
 
 arcpy.management.CalculateField(joinfc, "BikeDemandScore", "((!popdensrating!*9)+(!jobdensrating!*11)+(!lumixrating!*10)+(!schoolrating!*10)+(!parkrating!*5)+(!collegerating!*10)+(!retailrating!*11)+(!busrating!*3)+(!railrating!*11)+(!agerating!*3)+(!novehrating!*4)+(!povrating!*6)+(!blocklengthrating!*2)+(!MeanBikeRating!*5))/100", "PYTHON3", '', "DOUBLE")
 arcpy.management.CalculateField(joinfc, "PedDemandScore", "((!popdensrating!*9)+(!jobdensrating!*9)+(!lumixrating!*11)+(!schoolrating!*9)+(!parkrating!*5)+(!collegerating!*9)+(!retailrating!*12)+(!busrating!*4)+(!railrating!*10)+(!agerating!*3)+(!novehrating!*4)+(!povrating!*5)+(!blocklengthrating!*5)+(!MeanPedRating!*5))/100", "PYTHON3", '', "DOUBLE")
+
+# Clean up - delete buffer feature classes
+print("Deleting buffers...")
+removebuffers = ["RailStationsbuffer", "K12Schoolsbuffer", "ParksTrailheadsbuffer", "RetailCentersbuffer", "CollegesBuffer", "BusStopsBuffer"]
+for f in removebuffers:
+    arcpy.Delete_management(f)
+
+busstopsshp = os.path.join(temp_wd, "bus_stops.shp")
+arcpy.Delete_management(busstopsshp)
+busstopsbuffershp = os.path.join(temp_wd, "BusStopsBuffer.shp")
+arcpy.Delete_management(busstopsbuffershp)
+
+print("Buffers deleted!")
 
 print('DONE!')
