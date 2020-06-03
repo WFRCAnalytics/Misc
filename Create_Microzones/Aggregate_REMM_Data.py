@@ -59,7 +59,7 @@ from parcels
 temp = r'E:\Micromobility\Aggregation'
 
 remm_buildings = r"E:\Micromobility\Aggregation\run1244year2019allbuildings.csv"
-remm_parcels = r"E:\Micromobility\Aggregation\run1244year2019Parcels.csv"
+# remm_parcels = r"E:\Micromobility\Aggregation\run1244year2019Parcels.csv"
 
 parcels_geom = r"E:\Micromobility\Data\REMM_parcels.shp"
 microzones_geom = r"E:\Projects\Misc\Create_Microzones\Output\microzones.shp"
