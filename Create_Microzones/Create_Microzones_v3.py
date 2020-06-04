@@ -20,8 +20,7 @@ arcpy.CheckOutExtension("Spatial")
 #==========================
 # Args
 #==========================
-
-#taz_polygons = os.path.join(os.getcwd(), 'Data\TAZ_geometry.shp') 
+ 
 taz_polygons = "E:\Micromobility\Data\Zones\TAZ_WFRC_UTM12.shp"
 roads = r"E:\Micromobility\Data\Multimodal_Network\Roads.shp"
 temp_dir = os.path.join(os.getcwd(), 'Output')
@@ -384,11 +383,12 @@ maz_remm_data['ENROL_HIGH'] = maz_remm_data['ENROL_HIGH']/maz_remm_data['populat
 # Other datasets
 #===================
 
-# Transit stops
-commuter_rail_stops = r"E:\Micromobility\Data\Attributes\CommuterRailStations_UTA.shp"
-light_rail_stops = r"E:\Micromobility\Data\Attributes\LightRailStations_UTA.shp"
+print("computing AGRC attributes...")
 
+
+#-------------------
 # Parks
+#-------------------
 """
 1:  Acreage > 10
 2:  5 < Acreage < 10
@@ -397,61 +397,117 @@ light_rail_stops = r"E:\Micromobility\Data\Attributes\LightRailStations_UTA.shp"
 
 parks = r"E:\Micromobility\Data\Attributes\ParksLocal.shp"
 
+# code for calculating park score
 
+# use spatial join to get park score on to microzones (maximum score in zone will be used)
+fieldmappings = arcpy.FieldMappings()
+fieldmappings.addTable(microzones_geom)
+fieldmappings.addTable(parks)
+modFieldMapping(fieldmappings, 'Park_Score', 'max')
+
+maz_park_join = os.path.join(temp_dir, "maz_park_join.shp")
+arcpy.SpatialJoin_analysis(microzones_geom, parks, output_features, "JOIN_ONE_TO_ONE", "KEEP_ALL", fieldmappings, "INTERSECT")
+
+# merge park score field back to full table
+maz_park_join_df = gpd.read_file(maz_park_join)
+zonal_table =  zonal_table[['zone_id', 'Park_Score']]
+maz_remm_data = maz_remm_data.merge(maz_park_join_df, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
+
+#-------------------
 # Schools
+#-------------------
 """
-Online/Higher Education (3): NOT ("EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0)  AND ("SCHOOLTYPE" = 'Online Charter School' OR "SCHOOLTYPE" = 'Online School' OR "SCHOOLTYPE" = 'Regional Campus' OR "SCHOOLTYPE" = 'Residential Campus' )
+Online/Higher Education (1): NOT ("EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0)  AND ("SCHOOLTYPE" = 'Online Charter School' OR "SCHOOLTYPE" = 'Online School' OR "SCHOOLTYPE" = 'Regional Campus' OR "SCHOOLTYPE" = 'Residential Campus' )
 High Schools(2): "EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0
-Elem/Middle (1): Everything else
+Elem/Middle (3): Everything else
 
 """
 
 schools = r"E:\Micromobility\Data\Attributes\Schools.shp"
 
+# code for calculating school score
+
+# use spatial join to get school code on to microzones (maximum score in zone will be used)
+fieldmappings = arcpy.FieldMappings()
+fieldmappings.addTable(microzones_geom)
+fieldmappings.addTable(parks)
+modFieldMapping(fieldmappings, 'School_Code', 'max')
+
+maz_school_join = os.path.join(temp_dir, "maz_schools_join.shp")
+arcpy.SpatialJoin_analysis(microzones_geom, schools, output_features, "JOIN_ONE_TO_ONE", "KEEP_ALL", fieldmappings, "INTERSECT")
+
+# merge park score field back to full table
+maz_school_join_df = gpd.read_file(maz_park_join)
+zonal_table =  zonal_table[['zone_id', 'Park_Score']]
+maz_remm_data = maz_remm_data.merge(maz_school_join_df, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
+
+#-------------------
 # trailheads 
+#-------------------
 """
  1) trailhead 0 ) none
 """
 
 trail_heads = r"E:\Micromobility\Data\Attributes\Trailheads.shp"
 
+# code for calculating trail head presence
+
+# use spatial join to get school code on to microzones (maximum score in zone will be used)
+# fieldmappings = arcpy.FieldMappings()
+# fieldmappings.addTable(microzones_geom)
+# fieldmappings.addTable(parks)
+# modFieldMapping(fieldmappings, 'School_Code', 'max')
+
+maz_th_join = os.path.join(temp_dir, "maz_th_join.shp")
+arcpy.SpatialJoin_analysis(microzones_geom, trail_heads, output_features, "JOIN_ONE_TO_ONE", "KEEP_ALL", fieldmappings, "INTERSECT")
+
+# merge park score field back to full table
+maz_th_join_df = gpd.read_file(maz_th_join) # Might have to fill in zeroes
+zonal_table =  zonal_table[['zone_id', 'Trail_Head']]
+maz_remm_data = maz_remm_data.merge(maz_th_join_df, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
+
+#-------------------
+# Transit stops
+#-------------------
+commuter_rail_stops = r"E:\Micromobility\Data\Attributes\CommuterRailStations_UTA.shp"
+light_rail_stops = r"E:\Micromobility\Data\Attributes\LightRailStations_UTA.shp"
 
 
 
 
-# manually joined data will have to re-do
-final_data = r"E:\Scratch\maz_se_parks_th_sch_lr_cr.shp"
+# # manually joined data will have to re-do
+# final_data = r"E:\Scratch\maz_se_parks_th_sch_lr_cr.shp"
 
-final_data = gpd.read_file(final_data)
-final_data2 = final_data[[
- 'zone_id',
- 'residentia',
- 'households',
- 'population',
- 'jobs1',
- 'jobs3',
- 'jobs4',
- 'jobs5',
- 'jobs6',
- 'jobs7',
- 'jobs9',
- 'jobs10',
- 'CO_TAZID',
- 'TAZID',
- 'AVGINCOME',
- 'ENROL_ELEM',
- 'ENROL_MIDL',
- 'ENROL_HIGH',
- 'Park_Score',
- 'TRAIL_HD',
- 'School_CD',
- 'LGT_RAIL',
- 'COMM_RAIL',
- 'geometry']]
+# final_data = gpd.read_file(final_data)
+# final_data2 = final_data[[
+#  'zone_id',
+#  'residentia',
+#  'households',
+#  'population',
+#  'jobs1',
+#  'jobs3',
+#  'jobs4',
+#  'jobs5',
+#  'jobs6',
+#  'jobs7',
+#  'jobs9',
+#  'jobs10',
+#  'CO_TAZID',
+#  'TAZID',
+#  'AVGINCOME',
+#  'ENROL_ELEM',
+#  'ENROL_MIDL',
+#  'ENROL_HIGH',
+#  'Park_Score',
+#  'TRAIL_HD',
+#  'School_CD',
+#  'LGT_RAIL',
+#  'COMM_RAIL',
+#  'geometry']]
 
 
 
-final_data2.to_file(os.path.join(temp_dir, "microzones_draft_v2.shp"))
+# final_data2.to_file(os.path.join(temp_dir, "microzones_draft_v2.shp"))
 
 
 
