@@ -21,10 +21,26 @@ arcpy.CheckOutExtension("Spatial")
 # Args
 #==========================
  
+# From REMM
+remm_buildings = r"E:\Micromobility\Data\Tables\run1244year2019allbuildings.csv"
+remm_parcels = r"E:\Micromobility\Data\Zones\REMM_parcels_UTM12.shp"
+
+# From TDM
 taz_polygons = "E:\Micromobility\Data\Zones\TAZ_WFRC_UTM12.shp"
+taz_se_data = r"E:\Micromobility\Data\Tables\taz_se831_2015.csv"
+taz_se_data2 = r"E:\Micromobility\Data\Tables\LifeCycle_Households_Population_2015_831.csv"
+
+# From AGRC
 roads = r"E:\Micromobility\Data\Multimodal_Network\Roads.shp"
+trail_heads = r"E:\Micromobility\Data\Attributes\Trailheads.shp"
+schools = r"E:\Micromobility\Data\Attributes\Schools.shp"
+light_rail_stops = r"E:\Micromobility\Data\Attributes\LightRailStations_UTA.shp"
+parks = r"E:\Micromobility\Data\Attributes\ParksLocal.shp"
+commuter_rail_stops = r"E:\Micromobility\Data\Attributes\CommuterRailStations_UTA.shp"
+
+# Other
 temp_dir = os.path.join(os.getcwd(), 'Output')
-delete_intermediate_layers = False
+delete_intermediate_layers = True
 
 #====================
 # FUNCTIONS
@@ -185,7 +201,7 @@ merged_zones = arcpy.Merge_management([microzones_rings_erased, filled_zones], o
 arcpy.CalculateField_management(merged_zones,"zone_id",'!{}!'.format('FID'))
 
 # perform spatial join to get TAZ ID - may need more robust method for zones that cross multiple Tazs
-print('getting TAZ ids...')
+print('Getting TAZ ids...')
 microzones = arcpy.SpatialJoin_analysis(merged_zones, taz_polygons, os.path.join(temp_dir, 'microzones.shp'),'JOIN_ONE_TO_ONE', '', '', 'HAVE_THEIR_CENTER_IN')
 
 # Delete extra fields
@@ -198,17 +214,18 @@ for field in fields:
 
 
 # Clip microzones using determined (good) tazs
-print('clipping out bad TAZ areas...')
+print('Clipping out bad TAZ areas...')
 taz_layer = arcpy.MakeFeatureLayer_management(taz_polygons, 'tazs')
 query = """not "tazid" in(688, 689,1339, 1340, 2870, 2871, 2872, 1789, 1913, 1914, 1915, 1916, 2854)"""
 arcpy.SelectLayerByAttribute_management(taz_layer, "NEW_SELECTION", query)
-maz_clipped = arcpy.Clip_analysis(microzones, taz_layer, os.path.join(temp_dir, "maz_clipped.shp"))
+microzones_geom =  os.path.join(temp_dir, "maz_clipped.shp")
+maz_clipped = arcpy.Clip_analysis(microzones, taz_layer, microzones_geom)
 
 
 # Delete intermediate files (optional)
 if delete_intermediate_layers == True:
-    print('doing some clean-up...')
-    trash = [filled_zones, merged_roads, merged_zones, microzones_no_rings, microzones_rings_erased, prelim_zones, roads_clipped, taz_dissolved, taz_outline, zones_eliminated, zones_eliminated2]
+    print('Doing some clean-up...')
+    trash = [filled_zones, zones_layer, zones_layer2, merged_roads, merged_zones, microzones_no_rings, microzones_rings_erased, prelim_zones, roads_clipped, taz_dissolved, taz_outline, zones_eliminated, zones_eliminated2, microzones]
     print("Deleting intermediate files...")
     for dataset in trash:
         try:
@@ -246,10 +263,6 @@ from taz se
 
 """
 
-remm_buildings = r"E:\Micromobility\Data\Tables\run1244year2019allbuildings.csv"
-remm_parcels = r"E:\Micromobility\Data\Zones\REMM_parcels_UTM12.shp"
-microzones_geom =  os.path.join(temp_dir, "maz_clipped.shp")
-
 # load csvs as pandas dataframes
 buildings = pd.read_csv(remm_buildings)
 
@@ -273,7 +286,7 @@ parcels_join = parcels.merge(buildings_grouped, left_on = 'parcel_id', right_on 
 parcels_join.to_file(os.path.join(temp_dir, "parcels_with_aggd_buildings_data.shp"))
 
 # convert parcels to points centroids
-print('converting parcels to points...')
+print('Converting parcels to points...')
 arcpy.FeatureToPoint_management(os.path.join(temp_dir, "parcels_with_aggd_buildings_data.shp"), os.path.join(temp_dir, "pts_with_aggd_buildings_data.shp"), "INSIDE")
 
 # spatial join here
@@ -292,7 +305,7 @@ for field in fields_list:
     modFieldMapping(fieldmappings, field, 'Sum')
 
 # run spatial join
-print('joining parcel data to microzones...')
+print('Joining parcel data to microzones...')
 arcpy.SpatialJoin_analysis(target_features, join_features, output_features, "JOIN_ONE_TO_ONE", "KEEP_ALL", fieldmappings, "CONTAINS")
 
 # Select fields
@@ -302,6 +315,17 @@ maz_remm_data = maz_remm_data[['zone_id', 'CO_TAZID', 'TAZID', 'CO_FIPS', 'CO_NA
 # export to shape
 maz_output = os.path.join(temp_dir, "microzones_with_remm_data.shp")
 maz_remm_data.to_file(maz_output)
+
+# Free up memory
+print('doing some clean-up...')
+trash = [buildings, buildings_filtered, buildings_grouped, parcels, parcels_join]
+for dataset in trash:
+    try:
+        del dataset
+    except:
+        print('A file was unable to be deleted')
+
+
 
 #==================================
 # Disaggregate TAZ level SE data
@@ -320,15 +344,13 @@ LC3) households with seniors and may have children
 
 """
 
-print('creating TAZ level Socioeconomic data layer...')
+print('Creating TAZ level Socioeconomic data layer...')
 
 # Read in taz level se data
-taz_se_data = r"E:\Micromobility\Data\Tables\taz_se831_2015.csv"
 taz_se_data = pd.read_csv(taz_se_data)
 taz_se_data['CO_TAZID'] = taz_se_data['CO_TAZID'].astype(str)
 
 # # Read in taz level life cycle/age data and recreate COTAZID field
-taz_se_data2 = r"E:\Micromobility\Data\Tables\LifeCycle_Households_Population_2015_831.csv"
 taz_se_data2 = pd.read_csv(taz_se_data2)
 taz_se_data2['TAZID'] = taz_se_data2['Z'].map(addLeadingZeroesTAZ) 
 taz_se_data2['CO_TAZID'] = taz_se_data2['CO_FIPS'].astype(str) + taz_se_data2['TAZID'].astype(str)
@@ -372,18 +394,33 @@ for field in taz_fields:
     zonal_table['zone_id'] = zonal_table['zone_id'].astype(str)
     maz_remm_data = maz_remm_data.merge(zonal_table, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
     
+    # delete the raster
+    if delete_intermediate_layers == True:
+        arcpy.Delete_management(out_table)
+        arcpy.Delete_management(out_table_csv)
+        arcpy.Delete_management(out_p2r)
+    
 
 # normalize school enrollment data
 maz_remm_data['ENROL_ELEM'] = maz_remm_data['ENROL_ELEM']/maz_remm_data['population']
 maz_remm_data['ENROL_MIDL'] = maz_remm_data['ENROL_MIDL']/maz_remm_data['population']
 maz_remm_data['ENROL_HIGH'] = maz_remm_data['ENROL_HIGH']/maz_remm_data['population']
 
+# Free up memory
+print('Doing some clean-up...')
+trash = [taz_se_data, taz_se_data2, zonal_table]
+for dataset in trash:
+    try:
+        del dataset
+    except:
+        print('A file was unable to be deleted')
+
 
 #===================
 # Other datasets
 #===================
 
-print("computing attraction attributes...")
+print("Computing attraction attributes...")
 
 
 #-------------------
@@ -395,8 +432,7 @@ print("computing attraction attributes...")
 3:  Acreage < 5
 """
 
-print("working on parks...")
-parks = r"E:\Micromobility\Data\Attributes\ParksLocal.shp"
+print("Working on parks...")
 parks_lyr =  arcpy.MakeFeatureLayer_management(parks, 'parks')
   
 # add empty park score field if it doesn't exist
@@ -416,6 +452,8 @@ query = """"ACRES" < 5"""
 arcpy.SelectLayerByAttribute_management(parks_lyr, "NEW_SELECTION", query)
 arcpy.CalculateField_management(parks_lyr, "PARK_SCORE", '1')
 
+arcpy.SelectLayerByAttribute_management(parks_lyr, "CLEAR_SELECTION")
+
 # use spatial join to get park score on to microzones (maximum score in zone will be used)
 fieldmappings = arcpy.FieldMappings()
 fieldmappings.addTable(microzones_geom)
@@ -427,37 +465,43 @@ arcpy.SpatialJoin_analysis(microzones_geom, parks_lyr, maz_park_join, "JOIN_ONE_
 
 # merge park score field back to full table
 maz_park_join_df = gpd.read_file(maz_park_join)
-maz_park_join_df =  maz_park_join_df[['zone_id', 'PARK_SCORE']]
+maz_park_join_df =  maz_park_join_df[['zone_id', "PARK_SCORE"]]
 maz_remm_data = maz_remm_data.merge(maz_park_join_df, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
 
 #-------------------
 # Schools
 #-------------------
 """
-Online/Higher Education (1): NOT ("EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0)  AND ("SCHOOLTYPE" = 'Online Charter School' OR "SCHOOLTYPE" = 'Online School' OR "SCHOOLTYPE" = 'Regional Campus' OR "SCHOOLTYPE" = 'Residential Campus' )
-High Schools(2): "EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0
+Online/Higher Education (1): NOT ("EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0)  AND ("SCHOOLTYPE" = 'Online Charter School' OR "SCHOOLTYPE" = 'Online School' OR "SCHOOLTYPE" = 'Residential Campus' OR "EDTYPE" = 'Residential Treatment' OR "EDTYPE" = 'Alternative' OR "EDTYPE" = 'Adult High')
+
+High Schools & Colleges (2): ("EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0) OR ("SCHOOLTYPE" = 'Regional Campus')
+
 Elem/Middle (3): Everything else
 """
-print("working on schools...")
-schools = r"E:\Micromobility\Data\Attributes\Schools.shp"
+print("Working on schools...")
 schools_lyr =  arcpy.MakeFeatureLayer_management(schools, 'schools')
 
 # add school score field if it doesn't exist
 if not "SCHOOL_CD" in arcpy.ListFields(schools_lyr):  
     arcpy.AddField_management(schools_lyr, field_name="SCHOOL_CD", field_type='LONG')
+else:
+    arcpy.DeleteField_management(schools_lyr, field_name="SCHOOL_CD")
+    arcpy.AddField_management(schools_lyr, field_name="SCHOOL_CD", field_type='LONG')
 
 # calculate school code
-query = """NOT("EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0)  AND ("SCHOOLTYPE" = 'Online Charter School' OR "SCHOOLTYPE" = 'Online School' OR "SCHOOLTYPE" = 'Regional Campus' OR "SCHOOLTYPE" = 'Residential Campus' )"""
-arcpy.SelectLayerByAttribute_management(schools_lyr, "NEW_SELECTION", query)
-arcpy.CalculateField_management(schools_lyr, "SCHOOL_CD", '0')
-
-query = """"EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0"""
+query = """NOT("EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0)  AND ("SCHOOLTYPE" = 'Online Charter School' OR "SCHOOLTYPE" = 'Online School' OR "SCHOOLTYPE" = 'Regional Campus' OR "SCHOOLTYPE" = 'Residential Campus' OR "EDTYPE" = 'Residential Treatment' OR "EDTYPE" = 'Alternative' OR "EDTYPE" = 'Adult High' OR "EDTYPE" = 'Vocational')"""
 arcpy.SelectLayerByAttribute_management(schools_lyr, "NEW_SELECTION", query)
 arcpy.CalculateField_management(schools_lyr, "SCHOOL_CD", '1')
 
-query = """"SCHOOL_CD" <> 0 AND "SCHOOL_CD" <> 1"""
+query = """"EDTYPE" = 'Regular Education' AND "GRADEHIGH" = '12' AND "G_Low" > 0"""
 arcpy.SelectLayerByAttribute_management(schools_lyr, "NEW_SELECTION", query)
 arcpy.CalculateField_management(schools_lyr, "SCHOOL_CD", '2')
+
+query = """"SCHOOL_CD" <> 2 AND "SCHOOL_CD" <> 1"""
+arcpy.SelectLayerByAttribute_management(schools_lyr, "NEW_SELECTION", query)
+arcpy.CalculateField_management(schools_lyr, "SCHOOL_CD", '3')
+
+arcpy.SelectLayerByAttribute_management(schools_lyr, "CLEAR_SELECTION")
 
 # use spatial join to get school code on to microzones (if multiple scores present, maximum score in zone will be used)
 fieldmappings = arcpy.FieldMappings()
@@ -480,7 +524,7 @@ maz_remm_data = maz_remm_data.merge(maz_school_join_df, left_on = 'zone_id', rig
   1) trailhead 0 ) none
 """
 
-trail_heads = r"E:\Micromobility\Data\Attributes\Trailheads.shp"
+print("Working on trail heads...")
 trail_heads_lyr =  arcpy.MakeFeatureLayer_management(trail_heads, 'trail_heads')
 
 # add school score field if it doesn't exist
@@ -512,7 +556,7 @@ maz_remm_data = maz_remm_data.merge(maz_th_join_df, left_on = 'zone_id', right_o
   1) has commuter rail stop 0 ) none
 """
 
-commuter_rail_stops = r"E:\Micromobility\Data\Attributes\CommuterRailStations_UTA.shp"
+print("Working on commuter rail stops...")
 cr_lyr =  arcpy.MakeFeatureLayer_management(commuter_rail_stops, 'cr_layer')
 
 # add school score field if it doesn't exist
@@ -546,7 +590,7 @@ maz_remm_data = maz_remm_data.merge(maz_cr_join_df, left_on = 'zone_id', right_o
   1) has light rail stop 0 ) none
 """
 
-light_rail_stops = r"E:\Micromobility\Data\Attributes\LightRailStations_UTA.shp"
+print("Working on light rail stops...")
 lr_lyr =  arcpy.MakeFeatureLayer_management(light_rail_stops, 'lr_layer')
 
 # add school score field if it doesn't exist
