@@ -5,6 +5,9 @@ Miscellaneous scripts for processing, organization, etc. Scripts inside this rep
 **BikePed_Demand_Polygon:**
 Create bike/pedestrian potential demand layer for a provided set of zones (Nicole feel free to correct this)
 
+**BikePed_Demand_RoadCenterline**
+Create bike/pedestrian potential demand layer for provded set of road centerlines
+
 **Create Microzones:**
 Using a utah road network dataset create block sized zones for the micromobility toolset and assign them attributes
 
