@@ -27,16 +27,22 @@ remm_parcels = r"E:\Micromobility\Data\Zones\REMM_parcels_UTM12.shp"
 
 # From TDM
 taz_polygons = "E:\Micromobility\Data\Zones\TAZ_WFRC_UTM12.shp"
-taz_se_data = r"E:\Micromobility\Data\Tables\taz_se831_2015.csv"
-taz_se_data2 = r"E:\Micromobility\Data\Tables\LifeCycle_Households_Population_2015_831.csv"
+#taz_se_data = r"E:\Micromobility\Data\Tables\taz_se831_2015.csv"
+taz_se_data = r"E:\Micromobility\Data\Tables\taz_se831_2019.csv"
+#taz_se_data2 = r"E:\Micromobility\Data\Tables\LifeCycle_Households_Population_2015_831.csv"
+taz_se_data2 = r"E:\Micromobility\Data\Tables\LifeCycle_Households_Population_2019_v8.3.1.csv"
+#taz_se_data3 = r"E:\Micromobility\Data\Tables\Marginal_Income_2019_v831.csv"
+taz_se_data3 = r"E:\Micromobility\Data\Tables\Marginal_Income_2019_v831.csv"
 
-# From AGRC
+# From Other sources
 roads = r"E:\Micromobility\Data\Multimodal_Network\Roads.shp"
 trail_heads = r"E:\Micromobility\Data\Attributes\Trailheads.shp"
 schools = r"E:\Micromobility\Data\Attributes\Schools.shp"
 light_rail_stops = r"E:\Micromobility\Data\Attributes\LightRailStations_UTA.shp"
 parks = r"E:\Micromobility\Data\Attributes\ParksLocal.shp"
 commuter_rail_stops = r"E:\Micromobility\Data\Attributes\CommuterRailStations_UTA.shp"
+enrollment = r"E:\Micromobility\Data\Attributes\College_Enrollment.shp"
+group_quarters = r"E:\Micromobility\Data\Attributes\Group_Quarters_BlockGroup_2014_2018.shp"
 
 # Other
 temp_dir = os.path.join(os.getcwd(), 'Output')
@@ -251,15 +257,19 @@ from buildings:
     households
     population
     jobs1 (accomodation, food services)
-    jobs3 (construction)
-    jobs4 (government/education)
+    jobs2 (construction)
+    jobs3 (government/education)
+    jobs4 (healthcare)
     jobs5 (manufacturing)
     jobs6 (office)
     jobs7 (other)
+    jobs8 (mining)
     jobs9 (retail trade)
     jobs10 (wholesale, transport)
+    jobs11 (agriculture)
+    jobs12 (home-based job)
     
-from taz se
+add back in missing jobs and total jobs
 
 """
 
@@ -342,6 +352,13 @@ LC1) households with no children and seniors
 LC2) households with children and no seniors
 LC3) households with seniors and may have children
 
+Income Groups Count (Need to divide this by population)
+1) $0 to 34,999
+2) $35,000 to 49,999
+3) $50,000 to 99,999
+4) $100,000+
+
+    
 """
 
 print('Creating TAZ level Socioeconomic data layer...')
@@ -350,10 +367,14 @@ print('Creating TAZ level Socioeconomic data layer...')
 taz_se_data = pd.read_csv(taz_se_data)
 taz_se_data['CO_TAZID'] = taz_se_data['CO_TAZID'].astype(str)
 
-# # Read in taz level life cycle/age data and recreate COTAZID field
+# Read in taz level life cycle/age data and recreate COTAZID field
 taz_se_data2 = pd.read_csv(taz_se_data2)
 taz_se_data2['TAZID'] = taz_se_data2['Z'].map(addLeadingZeroesTAZ) 
 taz_se_data2['CO_TAZID'] = taz_se_data2['CO_FIPS'].astype(str) + taz_se_data2['TAZID'].astype(str)
+
+# Read in taz level income distribution data and recreate COTAZID field
+taz_se_data3 = pd.read_csv(taz_se_data3)
+taz_se_data3['CO_TAZID'] = taz_se_data3['CO_TAZID'].astype(str)
 
 # read in taz polygons
 taz_geometry = gpd.read_file(taz_polygons)
@@ -361,17 +382,19 @@ taz_geometry['CO_TAZID'] = taz_geometry['CO_TAZID'].astype(str)
 
 # join se data to taz polygons 
 taz_join = taz_geometry.merge(taz_se_data, how = 'inner', left_on = 'CO_TAZID', right_on = 'CO_TAZID')
-taz_join2= taz_join.merge(taz_se_data2, left_on = 'CO_TAZID', right_on = 'CO_TAZID' , how = 'inner')
+taz_join2 = taz_join.merge(taz_se_data2, left_on = 'CO_TAZID', right_on = 'CO_TAZID' , how = 'inner')
+taz_join3 = taz_join2.merge(taz_se_data3, left_on = 'CO_TAZID', right_on = 'CO_TAZID' , how = 'inner')
+
 
 # filter to desired columns
-taz_join_filt = taz_join2[['CO_TAZID', 'TAZID_x' , 'geometry', 'AVGINCOME','ENROL_ELEM', 'ENROL_MIDL','ENROL_HIGH', 'POP_LC1', 'POP_LC2', 'POP_LC3', 'HHSIZE_LC1', 'HHSIZE_LC2', 'HHSIZE_LC3', 'PCT_POPLC1', 'PCT_POPLC2', 'PCT_POPLC3', 'PCT_AG1', 'PCT_AG2', 'PCT_AG3']]
+taz_join_filt = taz_join3[['CO_TAZID', 'TAZID_x' , 'geometry', 'AVGINCOME','ENROL_ELEM', 'ENROL_MIDL','ENROL_HIGH', 'POP_LC1', 'POP_LC2', 'POP_LC3', 'HHSIZE_LC1', 'HHSIZE_LC2', 'HHSIZE_LC3', 'PCT_POPLC1', 'PCT_POPLC2', 'PCT_POPLC3', 'PCT_AG1', 'PCT_AG2', 'PCT_AG3', 'INC1', 'INC2', 'INC3', 'INC4']]
 
 # export taz data to shape
 out_taz_data = os.path.join(temp_dir, "taz_with_se_data.shp")
 taz_join_filt.to_file(out_taz_data)
 
 # Distribute attributes larger TAZ attributes to MAZ, using rasters and zonal stats
-taz_fields = ['AVGINCOME','ENROL_ELEM', 'ENROL_MIDL','ENROL_HIGH', 'HHSIZE_LC1', 'HHSIZE_LC2', 'HHSIZE_LC3', 'PCT_POPLC1', 'PCT_POPLC2', 'PCT_POPLC3', 'PCT_AG1', 'PCT_AG2', 'PCT_AG3']
+taz_fields = ['AVGINCOME','ENROL_ELEM', 'ENROL_MIDL','ENROL_HIGH', 'HHSIZE_LC1', 'HHSIZE_LC2', 'HHSIZE_LC3', 'PCT_POPLC1', 'PCT_POPLC2', 'PCT_POPLC3', 'PCT_AG1', 'PCT_AG2', 'PCT_AG3', 'INC1', 'INC2', 'INC3', 'INC4']
 
 for field in taz_fields:
     
@@ -518,34 +541,63 @@ maz_school_join_df =  maz_school_join_df[['zone_id', "SCHOOL_CD"]]
 maz_remm_data = maz_remm_data.merge(maz_school_join_df, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
 
 #-------------------
+# College Enrollment
+#-------------------
+"""
+  Enrollment count from TDM Trip table control except LDS Business College and Westminster
+
+"""
+
+print("Working on college enrollment...")
+enrollment_lyr =  arcpy.MakeFeatureLayer_management(enrollment, 'college_enrollment')
+
+# use spatial join to get enrollment on to microzones (maximum score in zone will be used)
+fieldmappings = arcpy.FieldMappings()
+fieldmappings.addTable(microzones_geom)
+fieldmappings.addTable(enrollment_lyr)
+modFieldMapping(fieldmappings, 'Enrollment', 'max')
+
+maz_ce_join = os.path.join(temp_dir, "maz_ce_join.shp")
+arcpy.SpatialJoin_analysis(microzones_geom, enrollment_lyr, maz_ce_join, "JOIN_ONE_TO_ONE", "KEEP_ALL", fieldmappings, "INTERSECT")
+
+# merge college enrollment field back to full table
+maz_ce_join_df = gpd.read_file(maz_ce_join) # Might have to fill in zeroes
+maz_ce_join_df =  maz_ce_join_df[['zone_id', 'Enrollment']]
+maz_remm_data = maz_remm_data.merge(maz_ce_join_df, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
+
+
+
+
+#-------------------
 # trailheads 
 #-------------------
 """
-  1) trailhead 0 ) none
+  3) most attractive 2) moderately attractive 1) least attractive
+    
 """
 
 print("Working on trail heads...")
 trail_heads_lyr =  arcpy.MakeFeatureLayer_management(trail_heads, 'trail_heads')
 
 # add school score field if it doesn't exist
-if not "trail_heads" in arcpy.ListFields(trail_heads_lyr):  
-    arcpy.AddField_management(trail_heads_lyr, field_name="TRAIL_HEAD", field_type='LONG')
+# if not "trail_heads" in arcpy.ListFields(trail_heads_lyr):  
+#     arcpy.AddField_management(trail_heads_lyr, field_name="TRAIL_HEAD", field_type='LONG')
 
 # code for calculating trail head presence
-arcpy.CalculateField_management(trail_heads_lyr, "TRAIL_HEAD", '1')
+# arcpy.CalculateField_management(trail_heads_lyr, "TRAIL_HEAD", '1')
 
-# use spatial join to get school code on to microzones (maximum score in zone will be used)
+# use spatial join to get trail head score on to microzones (maximum score in zone will be used)
 fieldmappings = arcpy.FieldMappings()
 fieldmappings.addTable(microzones_geom)
 fieldmappings.addTable(trail_heads_lyr)
-modFieldMapping(fieldmappings, 'TRAIL_HEAD', 'max')
+modFieldMapping(fieldmappings, 'TH_SCORE', 'max')
 
 maz_th_join = os.path.join(temp_dir, "maz_th_join.shp")
 arcpy.SpatialJoin_analysis(microzones_geom, trail_heads_lyr, maz_th_join, "JOIN_ONE_TO_ONE", "KEEP_ALL", fieldmappings, "INTERSECT")
 
 # merge park score field back to full table
 maz_th_join_df = gpd.read_file(maz_th_join) # Might have to fill in zeroes
-maz_th_join_df =  maz_th_join_df[['zone_id', 'TRAIL_HEAD']]
+maz_th_join_df =  maz_th_join_df[['zone_id', 'TH_SCORE']]
 maz_remm_data = maz_remm_data.merge(maz_th_join_df, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
 
 #----------------------
@@ -566,7 +618,7 @@ if not "COMM_RAIL" in arcpy.ListFields(cr_lyr):
 # code for calculating trail head presence
 arcpy.CalculateField_management(cr_lyr, "COMM_RAIL", '1')
 
-# use spatial join to get school code on to microzones (maximum score in zone will be used)
+# use spatial join to get commuter rail presence on to microzones (maximum score in zone will be used)
 fieldmappings = arcpy.FieldMappings()
 fieldmappings.addTable(microzones_geom)
 fieldmappings.addTable(cr_lyr)
@@ -616,9 +668,55 @@ maz_remm_data = maz_remm_data.merge(maz_lr_join_df, left_on = 'zone_id', right_o
 
 
 
+#----------------------
+# Group quarters
+#----------------------
+
+print("Working on group quarters data...")
+
+# distribute gqu_ratio field - group quarters (university) / population
+field = 'GQU_RATIO'
+
+# convert taz se data to raster resolution 20 sq meters 
+out_p2r = os.path.join(temp_dir,"{}.tif".format(field))
+arcpy.FeatureToRaster_conversion(group_quarters, field, out_p2r, cell_size=20)
+ 
+# use zonal stats (mean) to get table of values for each microzone
+out_table = os.path.join(temp_dir,"{}.dbf".format(field))
+arcpy.sa.ZonalStatisticsAsTable(maz_output, 'zone_id', out_p2r, out_table, 'DATA', 'MEAN')
+out_table_csv = os.path.join(temp_dir,"{}.csv".format(field))
+arcpy.TableToTable_conversion(out_table, os.path.dirname(out_table_csv), os.path.basename(out_table_csv))
+
+# merge table back with Microzones        
+zonal_table = pd.read_csv(out_table_csv)
+zonal_table =  zonal_table[['zone_id', 'MEAN']]
+zonal_table.columns = ['zone_id', field]
+zonal_table['zone_id'] = zonal_table['zone_id'].astype(str)
+maz_remm_data = maz_remm_data.merge(zonal_table, left_on = 'zone_id', right_on = 'zone_id' , how = 'inner')
+
+# delete the raster
+if delete_intermediate_layers == True:
+    arcpy.Delete_management(out_table)
+    arcpy.Delete_management(out_table_csv)
+    arcpy.Delete_management(out_p2r)
+
+
+#================================
+# WRAP-UP
+#================================ 
+
 # final export
-maz_remm_data.to_file(os.path.join(temp_dir, "microzones_draft_v2.shp"))
-
-
-
+maz_remm_data.to_file(os.path.join(temp_dir, "microzones.shp"))
 print('DONE!')
+
+
+
+
+
+
+
+
+
+
+
+
